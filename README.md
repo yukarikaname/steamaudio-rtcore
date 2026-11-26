@@ -141,6 +141,16 @@ synchronous.
   A wall must produce `occlusion == 0` and `transmission[0] == 0.5`; a clear
   path must produce `1.0` for both.
 
+## Verified on
+
+- **Apple M6, macOS 27.3:** Metal 4 backend, `ctest` passes, benchmark below.
+- **RTX 5060, SteamOS, NVK 26.2:** `VK_KHR_ray_query` is not exposed, so the
+  Vulkan backend returns `nullptr` and the test skips with exit code 77.
+- **Ubuntu 24.04, lavapipe (CPU Vulkan):** Vulkan backend passes the full
+  conformance test with `VK_LAYER_KHRONOS_validation` and zero validation
+  errors. This exercises the host code and ray-query shader; it is not an RT
+  core performance measurement.
+
 ## Performance
 
 Measured with `rtcore_bench`, which includes command submission and readback

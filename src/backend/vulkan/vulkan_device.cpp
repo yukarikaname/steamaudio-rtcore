@@ -198,7 +198,9 @@ bool VulkanTracer::loadFunctions() {
         vkGetDeviceProcAddr(device_, "vkGetAccelerationStructureBuildSizesKHR"));
     buildAS_ = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(
         vkGetDeviceProcAddr(device_, "vkCmdBuildAccelerationStructuresKHR"));
-    return createAS_ && destroyAS_ && buildSizes_ && buildAS_;
+    getASAddress_ = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(
+        vkGetDeviceProcAddr(device_, "vkGetAccelerationStructureDeviceAddressKHR"));
+    return createAS_ && destroyAS_ && buildSizes_ && buildAS_ && getASAddress_;
 }
 
 bool VulkanTracer::createPipeline() {
@@ -399,9 +401,16 @@ void VulkanTracer::shutdown() {
     destroyBuffer(indices_);
     destroyBuffer(scratch_);
     destroyBuffer(accelStorage_);
+    destroyBuffer(instances_);
+    destroyBuffer(tlasScratch_);
+    destroyBuffer(tlasStorage_);
     if (accel_ != VK_NULL_HANDLE) {
         destroyAS_(device_, accel_, nullptr);
         accel_ = VK_NULL_HANDLE;
+    }
+    if (tlas_ != VK_NULL_HANDLE) {
+        destroyAS_(device_, tlas_, nullptr);
+        tlas_ = VK_NULL_HANDLE;
     }
     if (pipeline_ != VK_NULL_HANDLE) {
         vkDestroyPipeline(device_, pipeline_, nullptr);

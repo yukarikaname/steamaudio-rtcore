@@ -94,6 +94,7 @@ private:
     PFN_vkDestroyAccelerationStructureKHR destroyAS_ = nullptr;
     PFN_vkGetAccelerationStructureBuildSizesKHR buildSizes_ = nullptr;
     PFN_vkCmdBuildAccelerationStructuresKHR buildAS_ = nullptr;
+    PFN_vkGetAccelerationStructureDeviceAddressKHR getASAddress_ = nullptr;
 
     VulkanBuffer vertices_;
     VulkanBuffer indices_;
@@ -101,7 +102,11 @@ private:
     VulkanBuffer hits_;
     VulkanBuffer scratch_;
     VulkanBuffer accelStorage_;
+    VulkanBuffer instances_;
+    VulkanBuffer tlasScratch_;
+    VulkanBuffer tlasStorage_;
     VkAccelerationStructureKHR accel_ = VK_NULL_HANDLE;
+    VkAccelerationStructureKHR tlas_ = VK_NULL_HANDLE;
 
     std::vector<VulkanTriangleRef> triangles_;
     std::size_t capacity_ = 0;

@@ -68,6 +68,13 @@ Status VulkanTracer::build(const SceneDesc& scene) {
     }
     destroyBuffer(accelStorage_);
     destroyBuffer(scratch_);
+    destroyBuffer(instances_);
+    destroyBuffer(tlasScratch_);
+    destroyBuffer(tlasStorage_);
+    if (tlas_ != VK_NULL_HANDLE) {
+        destroyAS_(device_, tlas_, nullptr);
+        tlas_ = VK_NULL_HANDLE;
+    }
 
     const VkBufferUsageFlags inputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -124,11 +131,73 @@ Status VulkanTracer::build(const SceneDesc& scene) {
         return Status::deviceError;
     }
 
+    VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR};
+    addressInfo.accelerationStructure = accel_;
+    const VkDeviceAddress blasAddress = getASAddress_(device_, &addressInfo);
+
+    if (createBuffer(sizeof(VkAccelerationStructureInstanceKHR), inputUsage, true, instances_) != Status::ok) {
+        return Status::outOfMemory;
+    }
+    VkAccelerationStructureInstanceKHR instance{};
+    instance.transform.matrix[0][0] = 1.0f;
+    instance.transform.matrix[1][1] = 1.0f;
+    instance.transform.matrix[2][2] = 1.0f;
+    instance.mask = 0xFF;
+    instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+    instance.accelerationStructureReference = blasAddress;
+    std::memcpy(instances_.mapped, &instance, sizeof(instance));
+
+    VkAccelerationStructureGeometryInstancesDataKHR instancesData{
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR};
+    instancesData.arrayOfPointers = VK_FALSE;
+    instancesData.data.deviceAddress = instances_.address;
+
+    VkAccelerationStructureGeometryKHR tlasGeometry{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+    tlasGeometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    tlasGeometry.geometry.instances = instancesData;
+
+    VkAccelerationStructureBuildGeometryInfoKHR tlasInfo{
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
+    tlasInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    tlasInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    tlasInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    tlasInfo.geometryCount = 1;
+    tlasInfo.pGeometries = &tlasGeometry;
+
+    const std::uint32_t instanceCount = 1;
+    VkAccelerationStructureBuildSizesInfoKHR tlasSizes{
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
+    buildSizes_(device_, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                &tlasInfo, &instanceCount, &tlasSizes);
+
+    if (createBuffer(tlasSizes.accelerationStructureSize, storageUsage, false, tlasStorage_) != Status::ok ||
+        createBuffer(tlasSizes.buildScratchSize,
+                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                     false, tlasScratch_) != Status::ok) {
+        return Status::outOfMemory;
+    }
+
+    VkAccelerationStructureCreateInfoKHR tlasCreate{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
+    tlasCreate.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    tlasCreate.buffer = tlasStorage_.handle;
+    tlasCreate.offset = 0;
+    tlasCreate.size = tlasSizes.accelerationStructureSize;
+    if (createAS_(device_, &tlasCreate, nullptr, &tlas_) != VK_SUCCESS) {
+        return Status::deviceError;
+    }
+
     buildInfo.dstAccelerationStructure = accel_;
     buildInfo.scratchData.deviceAddress = scratch_.address;
     VkAccelerationStructureBuildRangeInfoKHR range{};
     range.primitiveCount = primitiveCount;
     const VkAccelerationStructureBuildRangeInfoKHR* ranges[] = { &range };
+
+    tlasInfo.dstAccelerationStructure = tlas_;
+    tlasInfo.scratchData.deviceAddress = tlasScratch_.address;
+    VkAccelerationStructureBuildRangeInfoKHR tlasRange{};
+    tlasRange.primitiveCount = instanceCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* tlasRanges[] = { &tlasRange };
 
     const bool submitted = execute([&](VkCommandBuffer cmd) {
         VkMemoryBarrier toBuild{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -139,6 +208,14 @@ Status VulkanTracer::build(const SceneDesc& scene) {
                              0, 1, &toBuild, 0, nullptr, 0, nullptr);
 
         buildAS_(cmd, 1, &buildInfo, ranges);
+        VkMemoryBarrier blasBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        blasBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        blasBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                             VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                             0, 1, &blasBarrier, 0, nullptr, 0, nullptr);
+
+        buildAS_(cmd, 1, &tlasInfo, tlasRanges);
         VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
         barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
@@ -152,7 +229,7 @@ Status VulkanTracer::build(const SceneDesc& scene) {
     VkWriteDescriptorSetAccelerationStructureKHR asWrite{
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR};
     asWrite.accelerationStructureCount = 1;
-    asWrite.pAccelerationStructures = &accel_;
+    asWrite.pAccelerationStructures = &tlas_;
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     write.pNext = &asWrite;
     write.dstSet = descriptorSet_;
