@@ -67,6 +67,7 @@ cmake --build "$WORK/mysofa-build" -j "$(sysctl -n hw.ncpu)"
 MYSOFA_LIB="$(find "$WORK/mysofa-build/src" -maxdepth 1 -name 'libmysofa.*.dylib' ! -type l | head -1)"
 cp "$MYSOFA_LIB" "$DEPS/mysofa/lib/osx/release/libmysofa.dylib"
 ln -sf libmysofa.dylib "$DEPS/mysofa/lib/osx/release/libmysofa.1.dylib"
-cp "$WORK/mysofa/src/mysofa.h" "$DEPS/mysofa/include/mysofa.h"
+MYSOFA_HEADER="$(find "$WORK/mysofa" -name mysofa.h | head -1)"
+cp "$MYSOFA_HEADER" "$DEPS/mysofa/include/mysofa.h"
 
 echo "Steam Audio macOS deps ready under $DEPS"
