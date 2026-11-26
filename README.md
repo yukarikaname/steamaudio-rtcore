@@ -207,3 +207,10 @@ Reproduce:
 ./build/macos/rtcore_bench --rays 1048576 --batch 1048576 --grid 256 --iters 7
 ./build/macos/rtcore_bench_embree --rays 1048576 --grid 256 --iters 7
 ```
+
+## License
+
+MIT, Copyright (c) 2026 Yukari Kaname. See [LICENSE](LICENSE).
+
+Steam Audio remains under its own Apache-2.0 license and is not relicensed by
+this project; see `external/steam-audio/LICENSE.md`.
