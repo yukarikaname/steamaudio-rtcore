@@ -19,7 +19,7 @@ are modified.
 | Metal 4 | `MTL4CommandQueue` / `MTL4ComputeCommandEncoder` | MSL `intersection_query<triangle_data>` | Implemented, macOS 26+ |
 | Vulkan | `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` | GLSL `rayQueryEXT` | Implemented (build-tested; run on a Vulkan RT GPU) |
 
-Out of scope (no plan): legacy Metal 3 host path, OptiX, CUDA, Radeon Rays (2.0/4.0).
+Out of scope (no plan): legacy Metal 3 host path, OptiX, CUDA, Radeon Rays 4.0.
 The project deliberately stays at two backends; see `AGENTS.md`.
 
 Ray traversal always runs on RT cores. The "compute shader" is only the launch
@@ -144,8 +144,8 @@ synchronous.
 ## Verified on
 
 - **Apple M6, macOS 27.3:** Metal 4 backend, `ctest` passes, benchmark below.
-- **RTX 5060, SteamOS, NVK 26.2:** `VK_KHR_ray_query` is not exposed, so the
-  Vulkan backend returns `nullptr` and the test skips with exit code 77.
+- **Vulkan drivers without `VK_KHR_ray_query`:** the backend returns `nullptr`
+  and the test skips with exit code 77.
 - **Ubuntu 24.04, lavapipe (CPU Vulkan):** Vulkan backend passes the full
   conformance test with `VK_LAYER_KHRONOS_validation` and zero validation
   errors. This exercises the host code and ray-query shader; it is not an RT
@@ -179,16 +179,25 @@ Method notes:
 - Any-hit is faster than closest-hit because traversal can terminate at the
   first intersection.
 
-### No other backends
+### Test data wanted
 
 Only Metal 4 and Vulkan are supported. Legacy Metal 3, OptiX, CUDA, and Radeon
-Rays (2.0/4.0) are **no plan** and are not benchmarked here.
+Rays 4.0 are **no plan**.
 
-No comparison numbers for them are published because the required hardware is
-not available: there is no Windows/AMD OpenCL machine for Radeon Rays, no
-NVIDIA CUDA/OptiX environment, and the RTX 5060 host runs NVK 26.2, which does
-not expose `VK_KHR_ray_query`. Numbers from unverified hardware are not
-included.
+We still want real numbers from other setups. If you have the hardware, please
+open an issue (use the **Benchmark result** template) with a reproducible
+result:
+
+- GPU, driver and OS versions
+- whether `VK_KHR_ray_query` / MetalRT is exposed
+- scene triangle count, ray count and batch size
+- the exact command used
+- closest-hit / any-hit throughput
+- validation-layer status, if applicable
+
+Radeon Rays 2.0 is built into Steam Audio; results from a Windows/AMD OpenCL
+machine are especially welcome. We publish only numbers that can be reproduced
+with the commands below.
 
 Reproduce:
 

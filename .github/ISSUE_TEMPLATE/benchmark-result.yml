@@ -1,0 +1,57 @@
+name: Benchmark result
+description: Share reproducible ray tracing throughput for a backend / hardware combination
+title: "[bench] <backend> on <GPU>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for contributing test data. Please keep it reproducible and do not
+        mix results from different machines.
+  - type: input
+    id: backend
+    attributes:
+      label: Backend
+      description: Metal 4, Vulkan ray query, Radeon Rays 2.0, etc.
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+    validations:
+      required: true
+  - type: input
+    id: driver
+    attributes:
+      label: Driver and OS
+      placeholder: e.g. NVIDIA 580.xx / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: scene
+    attributes:
+      label: Scene and rays
+      placeholder: e.g. 131072 triangles, 1048576 rays, batch 65536
+    validations:
+      required: true
+  - type: input
+    id: closest
+    attributes:
+      label: Closest-hit throughput
+      placeholder: e.g. 157.1 Mrays/s
+    validations:
+      required: true
+  - type: input
+    id: anyhit
+    attributes:
+      label: Any-hit throughput
+      placeholder: e.g. 266.2 Mrays/s
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and notes
+      description: Paste the exact benchmark command, validation-layer result, and anything else needed to reproduce it.
+    validations:
+      required: true
