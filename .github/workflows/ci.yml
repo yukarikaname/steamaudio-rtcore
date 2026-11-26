@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-metal:
+    name: macOS 26 / Metal 4
+    runs-on: macos-26
+    env:
+      MYSOFA_URL: https://deb.debian.org/debian/pool/main/libm/libmysofa/libmysofa_1.3.3+dfsg.orig.tar.xz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          xcrun metal --version
+
+      - name: Install build tools
+        run: brew install cmake ninja flatbuffers
+
+      - name: Bootstrap Steam Audio dependencies
+        run: ./scripts/bootstrap_deps_macos.sh
+
+      - name: Configure
+        run: cmake --preset macos
+
+      - name: Build
+        run: cmake --build --preset macos -j 4
+
+      - name: Test
+        run: ctest --preset macos --output-on-failure
+
+      - name: Benchmark smoke test
+        run: |
+          set +e
+          ./build/macos/rtcore_bench --rays 65536 --batch 4096 --grid 128 --iters 1
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 77 ]; then
+            exit "$code"
+          fi
+
+  linux-vulkan:
+    name: Ubuntu / Vulkan ray query
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libvulkan-dev glslang-tools
+
+      - name: Configure
+        run: >
+          cmake -S . -B build/linux -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DRTCORE_ENABLE_STEAMAUDIO=OFF
+          -DRTCORE_BUILD_VULKAN=ON
+
+      - name: Build
+        run: cmake --build build/linux -j 4
+
+      - name: Test
+        run: ctest --test-dir build/linux --output-on-failure

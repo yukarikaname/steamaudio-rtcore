@@ -1,0 +1,3 @@
+[submodule "external/steam-audio"]
+	path = external/steam-audio
+	url = https://github.com/ValveSoftware/steam-audio.git

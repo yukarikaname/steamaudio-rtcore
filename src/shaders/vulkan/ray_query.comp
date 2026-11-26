@@ -1,0 +1,56 @@
+#version 460
+#extension GL_EXT_ray_query : require
+
+layout(local_size_x = 64) in;
+
+struct RTRay {
+    vec3 origin;
+    float tmin;
+    vec3 direction;
+    float tmax;
+};
+
+struct RTHit {
+    float distance;
+    uint primitive;
+    vec2 barycentrics;
+};
+
+layout(binding = 0) uniform accelerationStructureEXT scene;
+layout(binding = 1, std430) readonly buffer RayBuffer { RTRay rays[]; };
+layout(binding = 2, std430) writeonly buffer HitBuffer { RTHit hits[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint count;
+    uint anyHit;
+} params;
+
+void main() {
+    const uint index = gl_GlobalInvocationID.x;
+    if (index >= params.count) {
+        return;
+    }
+
+    RTRay rayIn = rays[index];
+    RTHit hitOut;
+    hitOut.distance = uintBitsToFloat(0x7F800000u);
+    hitOut.primitive = 0xFFFFFFFFu;
+    hitOut.barycentrics = vec2(0.0);
+
+    if (rayIn.tmax >= rayIn.tmin) {
+        const uint flags = (params.anyHit != 0u) ? gl_RayFlagsTerminateOnFirstHitEXT : gl_RayFlagsNoneEXT;
+        rayQueryEXT query;
+        rayQueryInitializeEXT(query, scene, flags, 0xFF,
+                              rayIn.origin, rayIn.tmin, rayIn.direction, rayIn.tmax);
+        while (rayQueryProceedEXT(query)) {
+        }
+
+        if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+            hitOut.distance = rayQueryGetIntersectionTEXT(query, true);
+            hitOut.primitive = uint(rayQueryGetIntersectionPrimitiveIndexEXT(query, true));
+            hitOut.barycentrics = rayQueryGetIntersectionBarycentricsEXT(query, true);
+        }
+    }
+
+    hits[index] = hitOut;
+}
