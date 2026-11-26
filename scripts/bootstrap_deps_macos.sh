@@ -68,6 +68,8 @@ MYSOFA_LIB="$(find "$WORK/mysofa-build/src" -maxdepth 1 -name 'libmysofa.*.dylib
 cp "$MYSOFA_LIB" "$DEPS/mysofa/lib/osx/release/libmysofa.dylib"
 ln -sf libmysofa.dylib "$DEPS/mysofa/lib/osx/release/libmysofa.1.dylib"
 MYSOFA_HEADER="$(find "$WORK/mysofa" -name mysofa.h | head -1)"
+MYSOFA_EXPORT="$(find "$WORK/mysofa-build" -name mysofa_export.h | head -1)"
 cp "$MYSOFA_HEADER" "$DEPS/mysofa/include/mysofa.h"
+cp "$MYSOFA_EXPORT" "$DEPS/mysofa/include/mysofa_export.h"
 
 echo "Steam Audio macOS deps ready under $DEPS"
