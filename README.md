@@ -19,7 +19,7 @@ are modified.
 | Metal 4 | `MTL4CommandQueue` / `MTL4ComputeCommandEncoder` | MSL `intersection_query<triangle_data>` | Implemented, macOS 26+ |
 | Vulkan | `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` | GLSL `rayQueryEXT` | Implemented (build-tested; run on a Vulkan RT GPU) |
 
-Out of scope (no plan): legacy Metal 3 host path, OptiX, CUDA, Radeon Rays 4.0.
+Out of scope (no plan): legacy Metal 3 host path, OptiX, CUDA, Radeon Rays (2.0/4.0).
 The project deliberately stays at two backends; see `AGENTS.md`.
 
 Ray traversal always runs on RT cores. The "compute shader" is only the launch
@@ -153,33 +153,48 @@ synchronous.
 
 ## Performance
 
-Measured with `rtcore_bench`, which includes command submission and readback
-(the real Steam Audio callback path), not just kernel time.
+Measured with `rtcore_bench` (Metal 4) and `rtcore_bench_embree` (CPU baseline).
+Metal numbers include command submission and readback, matching the synchronous
+Steam Audio callback path; Embree numbers are CPU traversal only.
 
-**Machine: Apple M6, 12-core GPU, macOS 27.3.**
+**Machine: Apple M6, 12-core GPU, 12 CPU threads, macOS 27.3.**
 
 Scene: 131,072 triangles (flat grid), 1,048,576 rays, all rays aimed at the
-grid. Best of 7 iterations after a warm-up; the mean is roughly 2-5% lower.
+grid. Best of 7 iterations after a warm-up; the mean is a few percent lower.
 
-| Backend | GPU | Ray batch | Closest hit | Any hit |
-|---|---|---|---|---|
-| Metal 4 ray query | Apple M6 | 4,096 | 20.5 Mrays/s | 29.5 Mrays/s |
-| Metal 4 ray query | Apple M6 | 65,536 | 137.8 Mrays/s | 190.0 Mrays/s |
-| Radeon Rays 2.0 | not measured | — | — | — |
+| Backend | Hardware | Ray batch | Closest hit | Any hit |
+|---|---|---|---:|---:|
+| Metal 4 ray query | Apple M6 GPU | 4,096 | 20.5 Mrays/s | 29.5 Mrays/s |
+| Metal 4 ray query | Apple M6 GPU | 65,536 | 137.8 Mrays/s | 190.0 Mrays/s |
+| Metal 4 ray query | Apple M6 GPU | 1,048,576 | 157.1 Mrays/s | 266.2 Mrays/s |
+| Embree 4.5 (CPU reference, not a backend) | Apple M6 CPU, 12 threads | 1,048,576 | 86.7 Mrays/s | 102.9 Mrays/s |
 
-The small batch is Steam Audio's typical `rayBatchSize`; the large batch shows
-what the same GPU path reaches when the per-submission sync cost is amortized.
-If you control `IPLSimulationSettings::rayBatchSize`, larger batches pay off on
-Apple Silicon.
+Method notes:
 
-Radeon Rays 2.0 is Steam Audio's built-in Windows/AMD OpenCL backend. It was
-not measured here (this machine has no AMD GPU and no Windows/OpenCL runtime),
-and this project does not integrate it. Treat that row as unfilled, not as a
-comparison result.
+- The 4,096 row matches Steam Audio's typical `rayBatchSize`; larger batches
+  amortize Metal submission and readback overhead.
+- Embree is **not** an rtcore backend. It is the fastest CPU option available on
+  M6 and serves only as a reference point. It uses `rtcIntersect1` /
+  `rtcOccluded1` across 12 threads.
+- Any-hit is faster than closest-hit because traversal can terminate at the
+  first intersection.
+
+### No other backends
+
+Only Metal 4 and Vulkan are supported. Legacy Metal 3, OptiX, CUDA, and Radeon
+Rays (2.0/4.0) are **no plan** and are not benchmarked here.
+
+No comparison numbers for them are published because the required hardware is
+not available: there is no Windows/AMD OpenCL machine for Radeon Rays, no
+NVIDIA CUDA/OptiX environment, and the RTX 5060 host runs NVK 26.2, which does
+not expose `VK_KHR_ray_query`. Numbers from unverified hardware are not
+included.
 
 Reproduce:
 
 ```bash
 ./build/macos/rtcore_bench --rays 1048576 --batch 4096 --grid 256 --iters 7
 ./build/macos/rtcore_bench --rays 1048576 --batch 65536 --grid 256 --iters 7
+./build/macos/rtcore_bench --rays 1048576 --batch 1048576 --grid 256 --iters 7
+./build/macos/rtcore_bench_embree --rays 1048576 --grid 256 --iters 7
 ```

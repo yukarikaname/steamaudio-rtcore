@@ -20,6 +20,7 @@ option(RTCORE_BUILD_VULKAN "Build the Vulkan ray-query backend." ON)
 option(RTCORE_ENABLE_STEAMAUDIO "Build the Steam Audio custom-tracer adapter." ON)
 option(RTCORE_BUILD_TESTS "Build tests." ON)
 option(RTCORE_BUILD_BENCH "Build the benchmark tool." ON)
+option(RTCORE_BUILD_EMBREE_BENCH "Build the Embree CPU baseline benchmark." ON)
 
 set(RTCORE_SOURCES
     src/status.cpp
@@ -209,4 +210,21 @@ if(RTCORE_BUILD_BENCH)
     add_executable(rtcore_bench bench/bench_tracer.cpp)
     target_link_libraries(rtcore_bench PRIVATE rtcore)
     set_target_properties(rtcore_bench PROPERTIES BUILD_RPATH "${RTCORE_RUNTIME_RPATH}")
+endif()
+
+if(RTCORE_BUILD_BENCH AND RTCORE_BUILD_EMBREE_BENCH)
+    find_path(RTCORE_EMBREE_INCLUDE_DIR embree4/rtcore.h
+        HINTS /opt/homebrew/include /usr/local/include)
+    find_library(RTCORE_EMBREE_LIBRARY NAMES embree4
+        HINTS /opt/homebrew/lib /usr/local/lib)
+    if(RTCORE_EMBREE_INCLUDE_DIR AND RTCORE_EMBREE_LIBRARY)
+        add_executable(rtcore_bench_embree bench/bench_embree.cpp)
+        target_include_directories(rtcore_bench_embree PRIVATE "${RTCORE_EMBREE_INCLUDE_DIR}")
+        target_link_libraries(rtcore_bench_embree PRIVATE "${RTCORE_EMBREE_LIBRARY}")
+        find_package(Threads REQUIRED)
+        target_link_libraries(rtcore_bench_embree PRIVATE Threads::Threads)
+        message(STATUS "Embree CPU baseline benchmark enabled")
+    else()
+        message(STATUS "Embree not found; CPU baseline benchmark disabled")
+    endif()
 endif()

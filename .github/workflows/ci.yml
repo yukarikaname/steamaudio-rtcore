@@ -27,7 +27,7 @@ jobs:
           xcrun metal --version
 
       - name: Install build tools
-        run: brew install cmake ninja flatbuffers
+        run: brew install cmake ninja flatbuffers embree
 
       - name: Bootstrap Steam Audio dependencies
         run: ./scripts/bootstrap_deps_macos.sh

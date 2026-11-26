@@ -31,7 +31,7 @@
 
 ## Backends
 - Implemented: Metal 4 (MTL4 host API + MSL ray query), Vulkan ray query.
-- No plan: OptiX, CUDA, Radeon Rays 4.0, legacy Metal 3 host path.
+- No plan: OptiX, CUDA, Radeon Rays 2.0/4.0, legacy Metal 3 host path.
 - Keep the two implemented backends strictly isolated behind `IRayTracer`.
 
 ## Testing
